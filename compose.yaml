@@ -1,0 +1,24 @@
+# =====================================================================
+# Floci — 로컬 AWS 에뮬레이터
+# ---------------------------------------------------------------------
+# - 이미지 태그를 `latest`가 아닌 고정 버전으로 지정합니다.
+#   (latest는 어느 날 갑자기 동작이 바뀔 수 있음 → 재현성 붕괴)
+# - docker.sock 마운트: Floci가 EC2/RDS를 "진짜 컨테이너"로 띄우려면
+#   호스트의 Docker 엔진에 접근해야 합니다.
+#   Colima 등 소켓 경로가 다른 환경은 DOCKER_SOCK 환경변수로 덮어쓰세요.
+# =====================================================================
+services:
+  floci:
+    image: floci/floci:2.4.0
+    container_name: floci
+    user: root
+    ports:
+      - "127.0.0.1:4566:4566" # 외부 노출 없이 내 컴퓨터에서만 접근
+    environment:
+      FLOCI_DEFAULT_REGION: ap-northeast-2
+      FLOCI_STORAGE_MODE: persistent
+      FLOCI_STORAGE_PERSISTENT_PATH: /app/data
+    volumes:
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
+      - ./.floci-data:/app/data
+    restart: unless-stopped
