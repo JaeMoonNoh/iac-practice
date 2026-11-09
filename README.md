@@ -72,6 +72,23 @@ echo 'eval "$(mise activate zsh)"' >> ~/.zshrc   # bash 사용 시 zsh → bash
 exec $SHELL
 ```
 
+### 4. (선택) VS Code 설정
+
+리포를 열면 오른쪽 아래에 추천 확장 설치 알림이 뜹니다([.vscode/extensions.json](.vscode/extensions.json)). 직접 설치하려면:
+
+```bash
+code --install-extension hashicorp.terraform        # .tf 문법 강조, 자동완성, 저장 시 포맷
+code --install-extension tamasfe.even-better-toml   # .toml 문법 강조, 포맷
+```
+
+Terraform 확장이 저장 시 포맷을 하려면 VS Code에서 `terraform` 실행 파일을 찾을 수 있어야 합니다.
+mise로 설치한 terraform이 VS Code에 보이도록 아래 설정을 한 번 해주세요. 설정 후에는 VS Code를 완전히 종료했다가 다시 실행해야 합니다.
+
+```bash
+mise use -g terraform@1.17.1                                   # 폴더 밖에서도 쓸 기본 버전
+echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile     # GUI 앱(VS Code)에도 PATH 노출
+```
+
 ---
 
 ## 도구와 버전

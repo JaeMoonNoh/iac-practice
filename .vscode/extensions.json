@@ -1,0 +1,8 @@
+{
+  // 이 리포를 VS Code로 열면 아래 확장 설치를 자동으로 권유합니다.
+  "recommendations": [
+    "hashicorp.terraform",        // .tf 문법 강조, 자동완성, 정의로 이동, terraform fmt
+    "tamasfe.even-better-toml",   // mise.toml 등 TOML 문법 강조/포맷
+    "ms-azuretools.vscode-docker" // compose.yaml 자동완성/검증
+  ]
+}

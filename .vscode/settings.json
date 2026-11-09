@@ -1,0 +1,26 @@
+{
+  // 저장할 때 자동 포맷 (.tf 는 terraform fmt 와 동일한 결과)
+  "[terraform]": {
+    "editor.defaultFormatter": "hashicorp.terraform",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
+  },
+  "[terraform-vars]": {
+    "editor.defaultFormatter": "hashicorp.terraform",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml",
+    "editor.formatOnSave": true
+  },
+  // Makefile 은 반드시 탭 문자로 들여써야 동작합니다.
+  "[makefile]": {
+    "editor.insertSpaces": false
+  },
+  // 정렬된 = 기호(aws-cli   = ...) 를 유지
+  "evenBetterToml.formatter.alignEntries": true,
+  "files.associations": {
+    "*.tfplan": "plaintext"
+  }
+}
