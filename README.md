@@ -33,7 +33,8 @@ make apply       # 적용
 | `make reset` | Floci 중지 + 로컬 데이터 전부 삭제 |
 | `make status` | Floci 상태와 인증 확인 |
 | `make init` | `terraform init` |
-| `make check` | fmt 검사 + validate + tflint (**PR 올리기 전 필수**) |
+| `make test` | 모듈 단위 테스트 (`terraform test`, Floci 불필요) |
+| `make check` | fmt 검사 + validate + tflint + test (**PR 올리기 전 필수**) |
 | `make plan` / `apply` | plan을 파일로 저장한 뒤, **그 plan 그대로** 적용 |
 | `make destroy` | 리소스 전부 삭제 |
 
@@ -132,7 +133,8 @@ echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile     # GUI 앱(VS Code)
 ├── scripts/bootstrap.sh    # 새 컴퓨터 세팅
 ├── docs/                   # 단계별 학습 노트
 └── terraform/
-    ├── modules/            # (1단계~) 재사용 모듈: network, iam, compute, database ...
+    ├── modules/            # 재사용 모듈
+    │   └── network/        #   (1단계) VPC 3계층 + tests/
     └── envs/
         └── local/          # 환경별 진입점 (모듈을 조립)
 ```
@@ -144,7 +146,7 @@ echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile     # GUI 앱(VS Code)
 | 단계 | 내용 | 노트 |
 |---|---|---|
 | 0 | 도구 설치, Floci, provider 연결, 안전장치 | [docs/00-setup.md](docs/00-setup.md) |
-| 1 | VPC, 퍼블릭/프라이빗 서브넷, 라우팅 (network 모듈) | |
+| 1 | VPC, 퍼블릭/프라이빗 서브넷, 라우팅 (network 모듈), `terraform test` | [docs/01-network.md](docs/01-network.md) |
 | 2 | Remote State(S3 + lock), PR CI (fmt/validate/tflint/plan 코멘트) | |
 | 3 | IAM Role / Instance Profile (S3 읽기, ECR pull, SSM) — 최소 권한 | |
 | 4 | EC2 + SG, 인스턴스 타입 제한(validation), user_data | |

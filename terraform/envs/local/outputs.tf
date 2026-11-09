@@ -3,22 +3,38 @@ output "account_id" {
   value       = data.aws_caller_identity.current.account_id
 }
 
-output "caller_arn" {
-  description = "현재 인증 주체 ARN"
-  value       = data.aws_caller_identity.current.arn
-}
-
 output "region" {
   description = "현재 리전"
   value       = data.aws_region.current.region
 }
 
-output "availability_zones" {
-  description = "사용 가능한 AZ 목록"
-  value       = data.aws_availability_zones.available.names
+output "azs" {
+  description = "사용 중인 AZ"
+  value       = local.azs
 }
 
-output "emulated_services" {
-  description = "Floci로 라우팅되는 서비스 목록"
-  value       = local.emulated_services
+output "vpc_id" {
+  description = "VPC ID"
+  value       = module.network.vpc_id
+}
+
+output "subnet_cidrs" {
+  description = "계층/AZ 별 CIDR"
+  value       = module.network.subnet_cidrs
+}
+
+output "public_subnet_ids" {
+  value = module.network.public_subnet_ids
+}
+
+output "app_subnet_ids" {
+  value = module.network.app_subnet_ids
+}
+
+output "db_subnet_ids" {
+  value = module.network.db_subnet_ids
+}
+
+output "nat_public_ips" {
+  value = module.network.nat_public_ips
 }

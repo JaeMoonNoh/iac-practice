@@ -9,7 +9,7 @@ MISE   := mise exec --
 TF     := $(MISE) terraform -chdir=$(TF_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help bootstrap up down reset status logs init fmt fmt-check validate lint check plan apply destroy output
+.PHONY: help bootstrap up down reset status logs init fmt fmt-check validate lint test check plan apply destroy output
 
 help: ## 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-11s\033[0m %s\n",$$1,$$2}'
@@ -56,7 +56,16 @@ lint: ## tflint 검사
 	@$(MISE) tflint --init --config "$(CURDIR)/.tflint.hcl" >/dev/null
 	@$(MISE) tflint --recursive --config "$(CURDIR)/.tflint.hcl"
 
-check: fmt-check validate lint ## 정적 검사 일괄 (PR 올리기 전에 실행)
+test: ## 모듈 단위 테스트 (mock provider, Floci 불필요)
+	@for d in terraform/modules/*/; do \
+	  if [ -d "$$d/tests" ]; then \
+	    echo "== $$d"; \
+	    $(MISE) terraform -chdir=$$d init -backend=false -input=false >/dev/null && \
+	    $(MISE) terraform -chdir=$$d test || exit 1; \
+	  fi; \
+	done
+
+check: fmt-check validate lint test ## 정적 검사 + 테스트 일괄 (PR 올리기 전에 실행)
 
 plan: ## 변경 계획 확인 (tfplan 파일로 저장)
 	@$(TF) plan -out=tfplan
