@@ -5,16 +5,6 @@
 # 에뮬레이터를 쓰기 때문에 아래 설정들이 추가로 필요합니다.
 # =====================================================================
 
-locals {
-  # 앞으로 사용할 AWS 서비스 목록. 새 서비스를 쓰게 되면 여기에 추가합니다.
-  # (Floci 공식 가이드: "사용하는 모든 서비스마다 endpoint를 지정해야 한다")
-  emulated_services = [
-    "ec2", "iam", "sts", "s3", "kms",
-    "secretsmanager", "ssm", "rds", "elbv2", "ecr",
-    "dynamodb", "cloudwatch", "logs",
-  ]
-}
-
 provider "aws" {
   region = var.aws_region
 
@@ -39,7 +29,8 @@ provider "aws" {
 
   # 서비스별 API 주소를 모두 Floci로 돌립니다.
   # endpoints 는 반복문으로 생성할 수 없어서 서비스마다 한 줄씩 적습니다.
-  # 새 서비스를 쓸 때는 여기와 위 locals 목록 두 곳에 추가하세요.
+  # (Floci 공식 가이드: "사용하는 모든 서비스마다 endpoint를 지정해야 한다")
+  # 새 AWS 서비스를 쓰게 되면 반드시 여기에 한 줄 추가하세요.
   endpoints {
     ec2            = var.aws_endpoint
     iam            = var.aws_endpoint

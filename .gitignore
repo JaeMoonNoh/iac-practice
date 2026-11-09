@@ -52,3 +52,6 @@ tfplan
 .env
 .mise.local.toml
 .DS_Store
+
+# 모듈 디렉터리의 lock 파일은 테스트용 부산물 (lock 은 envs/* 에서만 관리)
+terraform/modules/**/.terraform.lock.hcl
