@@ -9,7 +9,7 @@ MISE   := mise exec --
 TF     := $(MISE) terraform -chdir=$(TF_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help bootstrap up down reset status logs init fmt fmt-check validate lint test check plan apply destroy output
+.PHONY: help bootstrap up down reset status logs state-bootstrap state-ls init lock fmt fmt-check validate lint test check plan apply destroy output
 
 help: ## 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-11s\033[0m %s\n",$$1,$$2}'
@@ -39,9 +39,23 @@ status: ## Floci 상태 + 인증 확인
 logs: ## Floci 로그 따라보기
 	@docker compose logs -f floci
 
+# ---- Remote State ----------------------------------------------------
+BOOTSTRAP := $(MISE) terraform -chdir=terraform/bootstrap
+
+state-bootstrap: ## state 저장용 S3 버킷 생성 (Floci 기동 후 최초 1회, 여러 번 실행해도 안전)
+	@$(BOOTSTRAP) init -input=false >/dev/null
+	@$(BOOTSTRAP) apply -input=false -auto-approve
+	@echo "state 버킷 준비 완료 -> 이제 make init"
+
+state-ls: ## S3 에 저장된 state 파일 목록
+	@$(MISE) aws s3 ls s3://iac-practice-tfstate --recursive
+
 # ---- Terraform -------------------------------------------------------
-init: ## terraform init
-	@$(TF) init
+init: ## terraform init (S3 backend 연결)
+	@$(TF) init -input=false
+
+lock: ## provider lock 파일에 Mac/Linux 해시 모두 기록 (CI 에서도 같은 provider 보장)
+	@$(TF) providers lock -platform=darwin_arm64 -platform=darwin_amd64 -platform=linux_amd64 -platform=linux_arm64
 
 fmt: ## 코드 자동 정렬
 	@$(MISE) terraform fmt -recursive terraform
@@ -49,8 +63,11 @@ fmt: ## 코드 자동 정렬
 fmt-check: ## 정렬 안 된 파일 검사 (CI용, 수정 안 함)
 	@$(MISE) terraform fmt -recursive -check -diff terraform
 
-validate: ## 문법/타입 검사
+validate: ## 문법/타입 검사 (backend 연결 없이 → Floci 꺼져 있어도 동작)
+	@$(TF) init -backend=false -input=false >/dev/null
 	@$(TF) validate
+	@$(MISE) terraform -chdir=terraform/bootstrap init -backend=false -input=false >/dev/null
+	@$(MISE) terraform -chdir=terraform/bootstrap validate
 
 lint: ## tflint 검사
 	@$(MISE) tflint --init --config "$(CURDIR)/.tflint.hcl" >/dev/null

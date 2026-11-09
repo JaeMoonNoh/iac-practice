@@ -17,9 +17,10 @@ AWS 계정이나 비용 없이 연습할 수 있습니다.
 git clone git@github.com:JaeMoonNoh/iac-practice.git
 cd iac-practice
 
-make bootstrap   # mise + terraform/tflint/aws-cli (고정 버전) 설치
-make up          # Floci 기동 (localhost:4566)
-make init        # terraform init
+make bootstrap        # mise + terraform/tflint/aws-cli (고정 버전) 설치
+make up               # Floci 기동 (localhost:4566)
+make state-bootstrap  # state 저장용 S3 버킷 생성 (Floci 를 새로 띄웠을 때 1회)
+make init             # terraform init (S3 backend 연결)
 make plan        # 변경 계획 확인
 make apply       # 적용
 ```
@@ -32,7 +33,10 @@ make apply       # 적용
 | `make up` / `down` | Floci 기동 / 중지 (데이터 유지) |
 | `make reset` | Floci 중지 + 로컬 데이터 전부 삭제 |
 | `make status` | Floci 상태와 인증 확인 |
-| `make init` | `terraform init` |
+| `make state-bootstrap` | state 저장용 S3 버킷 생성 (여러 번 실행해도 안전) |
+| `make state-ls` | S3에 저장된 state 파일 목록 |
+| `make init` | `terraform init` (S3 backend 연결) |
+| `make lock` | provider lock 파일에 Mac/Linux 해시 기록 (provider 버전을 올렸을 때) |
 | `make test` | 모듈 단위 테스트 (`terraform test`, Floci 불필요) |
 | `make check` | fmt 검사 + validate + tflint + test (**PR 올리기 전 필수**) |
 | `make plan` / `apply` | plan을 파일로 저장한 뒤, **그 plan 그대로** 적용 |
@@ -131,12 +135,14 @@ echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile     # GUI 앱(VS Code)
 ├── Makefile                # 자주 쓰는 명령
 ├── .tflint.hcl             # 린트 규칙
 ├── scripts/bootstrap.sh    # 새 컴퓨터 세팅
+├── .github/workflows/      # PR CI (static checks + Floci e2e)
 ├── docs/                   # 단계별 학습 노트
 └── terraform/
     ├── modules/            # 재사용 모듈
     │   └── network/        #   (1단계) VPC 3계층 + tests/
+    ├── bootstrap/          # (2단계) state 저장용 S3 버킷 (이 스택만 로컬 state)
     └── envs/
-        └── local/          # 환경별 진입점 (모듈을 조립)
+        └── local/          # 환경별 진입점 (모듈을 조립, state 는 S3)
 ```
 
 ---
@@ -147,7 +153,7 @@ echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile     # GUI 앱(VS Code)
 |---|---|---|
 | 0 | 도구 설치, Floci, provider 연결, 안전장치 | [docs/00-setup.md](docs/00-setup.md) |
 | 1 | VPC, 퍼블릭/프라이빗 서브넷, 라우팅 (network 모듈), `terraform test` | [docs/01-network.md](docs/01-network.md) |
-| 2 | Remote State(S3 + lock), PR CI (fmt/validate/tflint/plan 코멘트) | |
+| 2 | Remote State(S3 + lock), PR CI (fmt/validate/tflint/test, plan 댓글, apply 검증) | [docs/02-remote-state-ci.md](docs/02-remote-state-ci.md) |
 | 3 | IAM Role / Instance Profile (S3 읽기, ECR pull, SSM) — 최소 권한 | |
 | 4 | EC2 + SG, 인스턴스 타입 제한(validation), user_data | |
 | 5 | Secrets Manager + RDS + SG 체이닝 | |
@@ -169,4 +175,6 @@ echo 'eval "$(mise activate zsh --shims)"' >> ~/.zprofile     # GUI 앱(VS Code)
 | EC2/RDS 생성 시 Docker 관련 에러 | docker.sock 경로 확인. Colima는 `DOCKER_SOCK` 지정 필요 |
 | `Invalid TOML ... mise.toml` | mise 버전이 너무 오래됨 → `brew upgrade mise` |
 | `mise.toml is not trusted` | `mise trust` |
+| `make init`에서 `NoSuchBucket` | Floci를 새로 띄웠거나 `make reset` 후임 → `make state-bootstrap` 먼저 |
+| `Error acquiring the state lock` | 다른 plan/apply가 실행 중. 아무도 실행 중이 아니면 `terraform force-unlock <ID>` (docs/02 참고) |
 | `allowed_account_ids` 에러 | 엔드포인트가 Floci가 아닌 곳을 가리키고 있음. **즉시 중단하고 설정 확인** |

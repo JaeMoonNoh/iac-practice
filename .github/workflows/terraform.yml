@@ -1,0 +1,165 @@
+# =====================================================================
+# Terraform CI — PR 을 올리면 자동으로 실행되는 검증 파이프라인
+# ---------------------------------------------------------------------
+# 1) static : 인프라 없이 하는 검사 (포맷, 문법, 린트, 단위 테스트)       ~1분
+# 2) e2e    : 깨끗한 Floci 를 새로 띄워서 실제로 plan → apply → 재plan → destroy
+#             + plan 결과를 PR 댓글로 게시                              ~3분
+#
+# 로컬과 "같은 명령(make ...)"을 그대로 실행합니다.
+# → "내 Mac 에선 됐는데 CI 에선 안 돼요"가 생기지 않도록.
+#
+# [한계] CI 의 Floci 는 매번 비어 있는 새 환경입니다. 그래서 여기 plan 은 항상
+#        "처음부터 전부 생성" 기준입니다. 내 Mac 의 실제 state 와 비교한 plan 은
+#        7단계(self-hosted runner)에서 다룹니다.
+# =====================================================================
+name: terraform
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# 같은 PR 에 새 커밋이 오면 이전 실행은 취소 (비용·시간 절약)
+concurrency:
+  group: terraform-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# 최소 권한: 기본은 읽기만. PR 댓글이 필요한 job 에서만 쓰기 권한 추가.
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true" # Terraform 출력에서 "다음에 이 명령을 치세요" 같은 안내 생략
+  TF_INPUT: "false" # 입력을 기다리며 멈추는 일 방지
+  MISE_YES: "1"
+  MISE_TRUSTED_CONFIG_PATHS: ${{ github.workspace }}
+
+jobs:
+  static:
+    name: static checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      # mise.toml 에 고정된 terraform / tflint / aws-cli 설치 (로컬과 같은 버전)
+      - uses: jdx/mise-action@v5
+        with:
+          install: true
+          cache: true
+
+      - name: terraform fmt
+        run: make fmt-check
+
+      - name: terraform validate
+        run: make validate
+
+      - name: tflint
+        run: make lint
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # tflint 플러그인 다운로드 rate limit 회피
+
+      - name: terraform test (mock provider)
+        run: make test
+
+  e2e:
+    name: plan / apply on Floci
+    needs: static # 정적 검사가 실패하면 실행하지 않음
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write # plan 결과 댓글
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: jdx/mise-action@v5
+        with:
+          install: true
+          cache: true
+
+      - name: Start Floci
+        run: make up
+
+      - name: Bootstrap state bucket
+        run: make state-bootstrap
+
+      - name: terraform init
+        run: make init
+
+      - name: terraform plan
+        id: plan
+        run: |
+          make plan
+          mise exec -- terraform -chdir=terraform/envs/local show -no-color tfplan > plan.txt
+          # 요약 줄만 따로 저장 (예: "Plan: 24 to add, 0 to change, 0 to destroy.")
+          grep -E '^Plan:|No changes' plan.txt | head -1 > plan-summary.txt || echo "요약 없음" > plan-summary.txt
+
+      - name: Comment plan on PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- terraform-plan:envs/local -->';
+            const summary = fs.readFileSync('plan-summary.txt', 'utf8').trim();
+            let plan = fs.readFileSync('plan.txt', 'utf8');
+            const max = 60000; // GitHub 댓글 최대 길이 65536자
+            if (plan.length > max) plan = plan.slice(0, max) + '\n... (잘림, 전체는 Actions 로그 참고)';
+
+            const body = [
+              marker,
+              '### Terraform plan — `envs/local`',
+              '',
+              `**${summary}**`,
+              '',
+              '> CI 의 Floci 는 매번 빈 환경이므로 "처음부터 생성" 기준 plan 입니다.',
+              '',
+              '<details><summary>전체 plan 보기</summary>',
+              '',
+              '```hcl',
+              plan,
+              '```',
+              '</details>',
+              '',
+              `커밋: ${context.sha.substring(0, 7)} · [실행 로그](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+            ].join('\n');
+
+            // 같은 PR 에 댓글이 계속 쌓이지 않도록, 기존 댓글이 있으면 수정
+            const { data: comments } = await github.rest.issues.listComments({
+              ...context.repo, issue_number: context.issue.number, per_page: 100,
+            });
+            const prev = comments.find(c => c.body.includes(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({ ...context.repo, comment_id: prev.id, body });
+            } else {
+              await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number, body });
+            }
+
+      - name: terraform apply
+        run: make apply
+
+      # apply 직후 다시 plan 했을 때 변경이 있으면 = 코드와 실제가 일치하지 않는 버그
+      # (예: provider 가 값을 정규화해서 매번 diff 가 나는 경우)
+      - name: Idempotency check (re-plan must be empty)
+        run: |
+          set +e
+          mise exec -- terraform -chdir=terraform/envs/local plan -detailed-exitcode -no-color > replan.txt
+          code=$?
+          set -e
+          if [ "$code" -eq 2 ]; then
+            echo "::error::apply 직후 plan 에 변경이 남아 있습니다 (멱등성 깨짐)"
+            cat replan.txt
+            exit 1
+          fi
+          exit $code
+
+      - name: terraform destroy
+        if: always() && steps.plan.outcome == 'success'
+        run: mise exec -- terraform -chdir=terraform/envs/local destroy -auto-approve
+
+      - name: Floci logs (on failure)
+        if: failure()
+        run: docker compose logs --tail 200 floci
