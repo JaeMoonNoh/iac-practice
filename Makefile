@@ -9,7 +9,7 @@ MISE   := mise exec --
 TF     := $(MISE) terraform -chdir=$(TF_DIR)
 
 .DEFAULT_GOAL := help
-.PHONY: help bootstrap up down reset status logs state-bootstrap state-ls init lock fmt fmt-check validate lint test check plan apply destroy output
+.PHONY: help bootstrap up down reset status logs mess state-bootstrap state-ls init lock fmt fmt-check validate lint test check plan apply destroy output
 
 help: ## 명령 목록
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-11s\033[0m %s\n",$$1,$$2}'
@@ -38,6 +38,11 @@ status: ## Floci 상태 + 인증 확인
 
 logs: ## Floci 로그 따라보기
 	@docker compose logs -f floci
+
+# ---- Brownfield 시나리오 ------------------------------------------------
+mess: ## (brownfield) 콘솔로 막 만든 회사 AWS 를 Floci 에 재현
+	@chmod +x scenarios/brownfield/create-mess.sh
+	@$(MISE) ./scenarios/brownfield/create-mess.sh
 
 # ---- Remote State ----------------------------------------------------
 BOOTSTRAP := $(MISE) terraform -chdir=terraform/bootstrap
